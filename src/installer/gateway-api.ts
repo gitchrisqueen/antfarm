@@ -108,6 +108,10 @@ function runCli(args: string[]): Promise<string> {
 const UPDATE_HINT =
   `This may be fixed by updating OpenClaw: npm update -g openclaw`;
 
+// Default values for cron job fields required by the Gateway
+const DEFAULT_CRON_EVERY_MS = 300_000; // 5 minutes
+const DEFAULT_CRON_TIMEOUT_SECONDS = 120;
+
 // ---------------------------------------------------------------------------
 // Cron operations — HTTP first, CLI fallback
 // ---------------------------------------------------------------------------
@@ -188,10 +192,28 @@ async function createAgentCronJobHTTP(job: {
     const headers: Record<string, string> = { "Content-Type": "application/json" };
     if (gateway.secret) headers["Authorization"] = `Bearer ${gateway.secret}`;
 
+    const completeJob = {
+      name: job.name,
+      schedule: {
+        kind: job.schedule?.kind || "every",
+        everyMs: job.schedule?.everyMs || DEFAULT_CRON_EVERY_MS,
+        anchorMs: job.schedule?.anchorMs ?? 0,
+      },
+      sessionTarget: job.sessionTarget || "isolated",
+      payload: {
+        kind: job.payload?.kind || "agentTurn",
+        message: job.payload?.message || "",
+        model: job.payload?.model || "",
+        timeoutSeconds: job.payload?.timeoutSeconds || DEFAULT_CRON_TIMEOUT_SECONDS,
+      },
+      delivery: job.delivery || { mode: "none" },
+      agentId: job.agentId || null,
+    };
+
     const response = await fetch(`${gateway.url}/tools/invoke`, {
       method: "POST",
       headers,
-      body: JSON.stringify({ tool: "cron", args: { action: "add", job }, sessionKey: "agent:main:main" }),
+      body: JSON.stringify({ tool: "cron", args: { action: "add", job: completeJob }, sessionKey: "agent:main:main" }),
     });
 
     if (response.status === 404) return null; // signal CLI fallback
