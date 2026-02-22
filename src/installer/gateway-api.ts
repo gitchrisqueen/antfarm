@@ -195,19 +195,19 @@ async function createAgentCronJobHTTP(job: {
     const completeJob = {
       name: job.name,
       schedule: {
-        kind: job.schedule?.kind || "every",
-        everyMs: job.schedule?.everyMs || DEFAULT_CRON_EVERY_MS,
-        anchorMs: job.schedule?.anchorMs ?? 0,
+        kind: job.schedule.kind || "every",
+        everyMs: job.schedule.everyMs || DEFAULT_CRON_EVERY_MS,
+        anchorMs: job.schedule.anchorMs ?? 0,
       },
-      sessionTarget: job.sessionTarget || "isolated",
+      sessionTarget: job.sessionTarget,
       payload: {
-        kind: job.payload?.kind || "agentTurn",
-        message: job.payload?.message || "",
-        model: job.payload?.model || "",
-        timeoutSeconds: job.payload?.timeoutSeconds || DEFAULT_CRON_TIMEOUT_SECONDS,
+        kind: job.payload.kind,
+        message: job.payload.message,
+        model: job.payload?.model,
+        timeoutSeconds: job.payload.timeoutSeconds || DEFAULT_CRON_TIMEOUT_SECONDS,
       },
       delivery: job.delivery || { mode: "none" },
-      agentId: job.agentId || null,
+      agentId: job.agentId,
     };
 
     const response = await fetch(`${gateway.url}/tools/invoke`, {
