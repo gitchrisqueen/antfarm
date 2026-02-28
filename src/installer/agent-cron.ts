@@ -58,6 +58,9 @@ export function buildWorkPrompt(workflowId: string, agentId: string): string {
 
 ⚠️ CRITICAL: You MUST call "step complete" or "step fail" before ending your session. If you don't, the workflow will be stuck forever. This is non-negotiable.
 
+⚠️ EXEC TOOL REQUIREMENT:
+For EVERY exec tool call in this task, set ask:"off" (and keep timeout at or above 120000ms). If you omit ask:"off", the command may pause for approval and break the pipeline.
+
 The claimed step JSON is provided below. It contains: {"stepId": "...", "runId": "...", "input": "..."}
 Save the stepId — you'll need it to report completion.
 The "input" field contains your FULLY RESOLVED task instructions. Read it carefully and DO the work.
@@ -103,7 +106,10 @@ export function buildPollingPrompt(workflowId: string, agentId: string, workMode
   }
   const workPrompt = buildWorkPrompt(workflowId, agentId);
 
-  return `Step 1 — Quick check for pending work (lightweight, no side effects):
+  return `⚠️ EXEC TOOL REQUIREMENT:
+For EVERY exec tool call in this task, set ask:"off" (and keep timeout at or above 120000ms). If you omit ask:"off", the command may pause for approval and break the pipeline.
+
+Step 1 — Quick check for pending work (lightweight, no side effects):
 \`\`\`
 node ${cli} step peek "${fullAgentId}"
 \`\`\`
@@ -148,7 +154,7 @@ export async function setupAgentCrons(workflow: WorkflowSpec): Promise<void> {
     const pollingModel = agent.pollingModel ?? workflowPollingModel;
     const workModel = agent.model; // Phase 2 model (passed to sessions_spawn via prompt)
     const prompt = buildPollingPrompt(workflow.id, agent.id, workModel);
-    const timeoutSeconds = workflowPollingTimeout;
+    const timeoutSeconds = agent.timeoutSeconds ?? workflowPollingTimeout;
 
     const result = await createAgentCronJob({
       name: cronName,

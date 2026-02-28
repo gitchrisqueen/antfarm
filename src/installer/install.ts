@@ -7,7 +7,7 @@ import { readOpenClawConfig, writeOpenClawConfig, type OpenClawConfig } from "./
 import { updateMainAgentGuidance } from "./main-agent-guidance.js";
 import { addSubagentAllowlist } from "./subagent-allowlist.js";
 import { installAntfarmSkill } from "./skill-install.js";
-import type { AgentRole, WorkflowInstallResult } from "./types.js";
+import type { AgentRole, WorkflowInstallResult, WorkflowSpec } from "./types.js";
 
 function ensureAgentList(config: { agents?: { list?: Array<Record<string, unknown>>; defaults?: Record<string, unknown> } }) {
   if (!config.agents) config.agents = {};
@@ -180,6 +180,30 @@ function buildToolsConfig(role: AgentRole): Record<string, unknown> {
   return tools;
 }
 
+function warnOnTimeoutMisalignment(workflow: WorkflowSpec, roleMap: Map<string, AgentRole>): void {
+  const pollingTimeout = workflow.polling?.timeoutSeconds;
+  const explicitAgentTimeouts = workflow.agents
+    .map(agent => agent.timeoutSeconds)
+    .filter((t): t is number => typeof t === "number");
+  const maxAgentTimeout = explicitAgentTimeouts.length > 0 ? Math.max(...explicitAgentTimeouts) : undefined;
+  if (pollingTimeout !== undefined && maxAgentTimeout !== undefined && pollingTimeout < maxAgentTimeout) {
+    console.warn(
+      `[antfarm] Warning: workflow "${workflow.id}" polling.timeoutSeconds (${pollingTimeout}s) is lower than max agent timeout (${maxAgentTimeout}s).`,
+    );
+  }
+
+  for (const agent of workflow.agents) {
+    if (agent.timeoutSeconds === undefined) continue;
+    const role = roleMap.get(agent.id) ?? inferRole(agent.id);
+    const roleTimeout = ROLE_POLICIES[role].timeoutSeconds;
+    if (agent.timeoutSeconds < roleTimeout) {
+      console.warn(
+        `[antfarm] Warning: workflow "${workflow.id}" agent "${agent.id}" timeoutSeconds (${agent.timeoutSeconds}s) is lower than ${role} role default (${roleTimeout}s).`,
+      );
+    }
+  }
+}
+
 function ensureCronSessionRetention(config: OpenClawConfig): void {
   if (!config.cron) config.cron = {};
   if (config.cron.sessionRetention === undefined) {
@@ -244,6 +268,7 @@ export async function installWorkflow(params: { workflowId: string }): Promise<W
   for (const agent of workflow.agents) {
     roleMap.set(agent.id, agent.role ?? inferRole(agent.id));
   }
+  warnOnTimeoutMisalignment(workflow, roleMap);
 
   const { path: configPath, config } = await readOpenClawConfig();
   ensureCronSessionRetention(config);
